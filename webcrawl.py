@@ -6,6 +6,8 @@ from mysqldb import Mysqldb
 from linkUtils import LinkUtils
 from webscraper import WebScraper
 from config import *
+from medicalTerms import *
+
 import re
 
 class LinkParser(HTMLParser):
@@ -28,8 +30,6 @@ class LinkParser(HTMLParser):
 			return
 
 	def handle_data(self, data):
-		
-
 		if data.strip() != "" and len(data.strip()) > 20:
 			wordsInData = data.split(" ")
 			wordsInData = filter(None, wordsInData) 
@@ -61,21 +61,22 @@ class LinkParser(HTMLParser):
 	def scrapeSite(self, url):
 		self.links = []
 			
-		if "twitter" in url or "facebook" in url or "youtube" in url or "instagram" in url:
+		if "twitter" in url or "facebook" in url or "youtube" in url or "instagram" in url or "linkedin" in url:
 			return None
 
 		response = None
 
 		try:
 			response = urlopen(url, timeout=2)
+
 			if response == None or response.getcode() != 200:
 				return None
 
 			self.baseUrl = response.geturl()
-			if len(self.baseUrl) < 512:
+
+			if len(self.baseUrl) > 512:
 				return None
 			if self.baseUrl != url:
-				print("baseUrl: %s" % (self.baseUrl))
 				linkId, newDomainId = self.db.selectLink(self.baseUrl)
 
 				# if new link already exists
@@ -103,19 +104,6 @@ class LinkParser(HTMLParser):
 								# delete existing domain relation
 								self.db.deleteDomainRelation(oldRelatedDomainId)
 								print("deleting domain relation record with id %s - url: %s" % (oldRelatedDomainId, url))
-
-
-							print(domainRelation)
-
-					#print(domainRelations)
-					# update reference
-					# update domain_relation
-						# select where base_domain_id = old_domain
-							# for all where base_domain_id = new_domain_id and related_domain_id = old_related_domain_id
-							# if record exist, update with old_count
-							# else create with new_domain_id, old_related_domain_id and old_count
-					# update article link
-						# for all where link_id = old_link_id SET = new_link_id 
 				else:
 					# replace existing link
 					self.db.updateLink(self.baseUrl, url)
@@ -125,6 +113,7 @@ class LinkParser(HTMLParser):
 				htmlBytes = response.read()
 
 				htmlString = htmlBytes.decode("utf-8")
+
 				self.feed(htmlString)
 				return self.links
 			else:
@@ -137,7 +126,7 @@ class LinkParser(HTMLParser):
 		print()
 		
 
-	def spider2(self, maxLinks=10000):
+	def spider(self, maxLinks=10000):
 		webScraper = WebScraper()
 		links = []
 		self.words = {}
@@ -174,55 +163,50 @@ class LinkParser(HTMLParser):
 			
 			#print("done with links")
 
-	def domainSpider(self, keywords, maxLinks=10000 ):
+	def domainSpider(self, keywords):
 		webScraper = WebScraper()
 		links = []
 		self.words = {}
 
-		numberVisited = 0
 		domainIds = self.db.selectDomainIdsFromKeywords(keywords)
 
 		domainLinks = self.db.selectLinkFromDomain(domainIds)
 
-		while numberVisited < maxLinks:
-			numberVisited = numberVisited + 1
+		for linkId, url in domainLinks.items():
+			self.db.updateCrawledLink(linkId)
+			links = self.scrapeSite(url)
 
-			for linkId, url in domainLinks.items():
-				self.db.updateCrawledLink(linkId)
+			articleId = self.db.insertArticle(linkId)
 
+			print(url)
+			for key, value in self.words.items():
 
-				self.words = {}
-				links = self.scrapeSite(url)
-				articleId = self.db.insertArticle(linkId)
+				wordId = self.db.selectWord(key)
+				if wordId == None:
+					wordId = self.db.insertWord(key, value)
+				else:
+					self.db.updateWord(wordId, value)
 
-				print(url)
+				self.db.insertArticleWord(articleId, wordId, value)
 
-				for key, value in self.words.items():
-					wordId = self.db.selectWord(key)
-					if wordId == None:
-						wordId = self.db.insertWord(key, value)
-					else:
-						self.db.updateWord(wordId, value)
+			
+			if(links != None and len(links) > 0):
+				domainId = self.db.selectDomainFromLink(linkId)
 
-					self.db.insertArticleWord(articleId, wordId, value)
+				self.insertLinks(domainId, links) 
 
-				
-				if(links != None and len(links) > 0):
-					domainId = self.db.selectDomainFromLink(linkId)
-
-					self.insertLinks(domainId, links) 
-
-				
+			
 
 	# insert all links collected
 	def insertLinks(self, baseDomainId, links):
-		linkUtils = LinkUtils()
+		
 
 		for link in links:
 			if link != None and len(link) != 0 and len(link) <= 512:
 				linkId, domainId = self.db.selectLink(link)
 
 				if linkId == None:
+					linkUtils = LinkUtils()
 					domain, domainExtension = linkUtils.linkSplitter(link) 
 					if domain != None and domainExtension != None:
 						linkId = self.db.insertLink(link, domain, domainExtension)
@@ -242,7 +226,7 @@ if __name__ == '__main__':
 	with Mysqldb(**mysqlconfig) as db:
 		linkParser = LinkParser(db)
 		#linkParser.insertDomainExtensions()
-		linkParser.domainSpider(['leukemia'])
+		linkParser.domainSpider(medicalTerms)
 		
 
 		#html, links = linkParser.getLinks('http://bit.ly/yk3b9m')

@@ -42,7 +42,7 @@ class WordClustering():
 	def calculateTDIDF(self, keyword, article):
 		wordId = self.db.selectWord(keyword)
 		
-		articleIds = self.db.selectArticleFromWords([wordId])
+		articleIds = self.db.selectArticleFromWord(wordId)
 		N = self.db.selectArticleSize()
 
 		IDF = log2(N/len(articleIds))

@@ -6,27 +6,23 @@ import time
 
 class NeuralNetwork():
 	"""docstring for ClassName"""
+	def __init__(self):
+		self.prepareData = PrepareData()
 
-	def fetch_date():
-		print()
+	def fetch_data(self):
+		dataSet = self.prepareData.getTrainingDocuments()
 
-	def sigmoid(x):
+	def sigmoid(self, x):
 		output = 1/(1+np.exp(-x))
     	return output
 
-	def sigmoid_derivative(output):
+	def sigmoid_derivative(self, output):
     	return output*(1-output)
 
-	def clean_up_sentence(sentence):
-		print()	
-
-	def bag_of_words():
+	def think(self, sentence, show_details=False):
 		print()
 
-	def think(sentence, show_details=False):
-		print()
-
-	def train(X, y, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
+	def train(self, X, y, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
 		print()
 
 	def test():
@@ -39,6 +35,7 @@ class NeuralNetwork():
 
 		elapsed_time = time.time() - start_time
 		print ("processing time:", elapsed_time, "seconds")
+
 if __name__ == '__main__':
 	prepareData = PrepareData()
 	prepareData.removeStopWords(["one"])
