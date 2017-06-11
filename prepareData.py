@@ -48,7 +48,7 @@ class PrepareData():
 	def stemWords(self, words):
 		ignore_words = set(stopwords.words('english'))
 		# stem and lower each word and remove duplicates
-		words = [self.stemmer.stem(w.lower()) for w in words if w not in ignore_words]
+		words = [self.stemmer.stem(str(w).lower()) for w in words if w not in ignore_words]
 		words = list(set(words))
 		return words
 
@@ -74,10 +74,11 @@ class PrepareData():
 		# remove duplicates
 		classes = list(set(classes))
 
+		"""
 		print (len(documents), "documents")
 		print (len(classes), "classes", classes)
 		print (len(words), "unique stemmed words", words)
-
+		"""
 		return documents, classes, words
 
 
@@ -144,8 +145,25 @@ class PrepareData():
 		print ("%s sentences in training data" % len(training_data))
 		return training_data
 
+	def getRealData(self, batchSize=1000, batches=1000):
+		training_data = []
+
+		currentBatch = 0
+		while currentBatch < batches:
+			articles = self.db.selectArticlesWithClass([0,1], limitLow=batchSize*currentBatch, batchSize=batchSize)
+
+			currentBatch = currentBatch + 1
+			if len(articles) < batchSize:
+				currentBatch = batches
+
+			for articleId, articleClass in articles.items():
+
+				training_data.append({"class":articleClass, "document":self.db.selectWordsFromArticle(articleId)})
+			print("batch %s done. with batch-size of: %s. First id: %s. Total length of data: %s" % (currentBatch, batchSize, articleId, len(training_data)))
+		return training_data
+
 	def getCompleteData(self):
-		documents, classes, words = self.getTrainingDocuments(prepareData.dummyData())
+		documents, classes, words = self.getTrainingDocuments(prepareData.getRealData())
 		X, Y = self.training_set(documents, classes, words)
 		return X, Y
 
@@ -176,17 +194,15 @@ class PrepareData():
 		for x in sorted_x[int(len(sorted_x)*0.95):]:
 			print("%s, %s" % (self.db.selectWordFromId(x[0]), x[1]))
 
-	def estimateMedicalWebsites(self, maxBatches=1000, batchSize=1):
-
-		#mostRelatedArticles = self.db.selectWordsInArticlesFromKeywords(medicalTerms, 100)
+	def estimateMedicalWebsites(self, maxBatches=1000, batchSize=100):
 		currentCount = 0
 		while maxBatches > currentCount:
 			articleIds = self.db.selectArticleWithNoTFIDF(batchSize)
 			print(articleIds)
 			for articleId in articleIds:
-				linkId = self.db.selectLinkFromArticle(articleId)
-				linkStr = self.db.selectLinkStr(linkId)
-
+				#linkId = self.db.selectLinkFromArticle(articleId)
+				#linkStr = self.db.selectLinkStr(linkId)
+				#print(linkStr)
 				#if self.isLinkRelevant(linkStr, linkId):
 				TFIDF = self.calculateTDIDF(medicalTerms, articleId)
 				lix = self.calculateLix(articleId)
@@ -204,10 +220,62 @@ class PrepareData():
 		"""
 		print("done")
 
-	def calculateClasses(self):
-		articleAndDomains = self.db.selectArticleAndDomain(100000)
-		print(articleAndDomains)
+	def estimateArticleClass(self):
+		# estimate class based on tfidf being higher than domain average, and in the top 95 percent of all tfidf values
+		articleTfidfAndLix = self.db.selectArticlTfidfAndLix(100000)
+		tfidfValue, LixValue = self.getPercentageTfidfAndLixValue(articleTfidfAndLix, 90)
+		
+		for key, value in articleTfidfAndLix.items():
+			avgDomainTfidf, avgDomainLix = self.db.selectDomainTfidfAndLixFromArticle(key)
+			
+			if(value[0]-avgDomainTfidf > 0.0 and value[0] > tfidfValue):
+				self.db.updateArticleClass(key, 1)
+			else:
+				self.db.updateArticleClass(key, 0)
+		
+	def getPercentageTfidfAndLixValue(self, dictionary, percentage):
+		tfidfs = []
+		lix = []
 
+			#lix = dictionary.values()(1)
+		for key, value in dictionary.items():
+			tfidfs.append(value[0])
+			lix.append(value[1])
+		index = int(len(tfidfs)*(percentage/100))
+
+		tfidfValue = sorted(tfidfs)[index]
+		LixValue = sorted(lix)[index]
+
+		return tfidfValue, LixValue 
+
+	def calculateAverageDomainStats(self):
+		articleAndDomains = self.db.selectArticleAndDomain(100000)
+		domainAverages = {}
+		for key, value in articleAndDomains.items():
+			if not value[2] is None and value[2] > 0.0: 
+				domainId = value[0]
+				if not domainId in domainAverages:
+					domainAverages[domainId] = [value[2], value[3], 1]
+				else:
+					prevTFIDFsum = domainAverages[domainId][0]
+					prevLixsum = domainAverages[domainId][1]
+					prevCount = domainAverages[domainId][2]
+					domainAverages[domainId] = [prevTFIDFsum + value[2], prevLixsum + value[3], prevCount + 1]
+					#print("id: %s \tdomain: %s\t\ttfidf: %s\tlix: %s" % (key, domainAndExtension, value[2], value[3]))
+		
+		
+
+		for key, value in domainAverages.items():
+			self.db.updateDomainTFIDF(key, value[0]/value[2])
+			self.db.updateDomainLix(key, value[1]/value[2])
+			#domainAverages[key] = [value[0]/value[2], value[1]/value[2], value[2]]
+			#print("%s\ntfidf: %s\tlix: %s" % (key, value[0]/value[2], value[1]/value[2]))
+
+		#sortedDomainAverages = sorted(domainAverages.items(), key=lambda i: i[1][0])
+		#for key, value in sortedDomainAverages:
+		#	print("%s\ntfidf: %s\tlix: %s" % (key, value[0], value[1]))
+			
+		
 	def calculateLix(self, articleId):
 		wordIds = self.db.selectWordsFromArticle(articleId)
 		
@@ -226,6 +294,7 @@ class PrepareData():
 		return lix
 
 	def calculateTDIDF(self, keywords, articleId=None):
+		print("calculateTDIDF %s " % (articleId))
 		wordIds = []
 		TFIDF = 0
 		for keyword in keywords:
@@ -258,7 +327,6 @@ class PrepareData():
 		#	words[wordId] = baseWordCount
 
 		maxWordLength = self.getMaximumValueFromDict(words)
-		print(maxWordLength)
 		#sorted_x = sorted(words.items(), key=operator.itemgetter(1))
 		if maxWordLength > 0:
 			TF = baseWordCount / maxWordLength
@@ -266,8 +334,10 @@ class PrepareData():
 		return TFIDF
 
 	def getMaximumValueFromDict(self, dictionary):
+		print("getMaximumValueFromDict %s" % (len(dictionary)))
 		maxValue = 0
 		for key, value in dictionary.items():
+			print(value)
 			if value > maxValue:
 				maxValue = value
 		return maxValue
@@ -294,8 +364,8 @@ class PrepareData():
 if __name__ == '__main__':
 	with Mysqldb(**mysqlconfig) as db:
 		prepareData = PrepareData(db)
-		prepareData.calculateClasses()
-		#print(prepareData.calculateLix(5119))
+		prepareData.estimateMedicalWebsites(batchSize=100)
+		#prepareData.getRealData()
 		#print(prepareData.calculateTDIDF(medicalTerms))
 
 			#,"Anthrax", "Atypical", "mycobacteriosis", "familial", "Balantidiasis", "Brucellosis", "Bubonic plague", "Buruli ulcer", "Cat scratch disease", "Chancroid", "Cholera", "Clostridium sordellii infection", "Cutaneous anthrax","Glanders"] )

@@ -37,6 +37,9 @@ class Mysqldb:
         """
         self.connection.close()
 
+    #######
+    #   TWEET
+    #######
     def insertTweet(self, userId, tweet, links):
         if userId == None or None in links:
             return None
@@ -67,6 +70,9 @@ class Mysqldb:
 
         self.connection.commit()
 
+    ######
+    #   USER
+    ######
     def insertUser(self, tweet):
 
         userId = None
@@ -337,6 +343,22 @@ class Mysqldb:
             print("error selecting domain from id")
         return domain, domainExtension
 
+    def selectDomainTfidfAndLixFromArticle(self, articleId):
+        selectSQL = "SELECT domain.avg_tfidf, domain.avg_lix FROM article JOIN link on article.link_id = link.id JOIN domain on domain.id = link.domain_id WHERE article.id = %s"
+
+        domain_tfidf = None
+        domain_lix = None
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(selectSQL, (articleId))
+
+                for row in cursor:
+                    domain_tfidf = row['avg_tfidf']
+                    domain_lix = row['avg_lix']
+        except:
+            print("error selectDomainTfidfAndLixFromArticle")
+        return domain_tfidf, domain_lix
+
     def selectDomainFromId(self, linkId):
         selectSQL = "SELECT link.domain, domain_extension.extension FROM link INNER JOIN domain_extension ON link.domain_extension_id=domain_extension.id WHERE link.id = %s"
         domain = None
@@ -392,6 +414,28 @@ class Mysqldb:
             print("error selecting domain relation id %s " % (cursor._last_executed))
 
         return domainIds
+
+    def updateDomainTFIDF(self, domainId, avg_tfidf):
+        updateSQL = "UPDATE domain SET avg_tfidf = %s WHERE id=%s"
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(updateSQL, (avg_tfidf, domainId))
+                cursor.close()
+        except:
+            print("error updateDomainTFIDF")
+
+        self.connection.commit()
+
+    def updateDomainLix(self, domainId, avg_lix):
+        updateSQL = "UPDATE domain SET avg_lix = %s WHERE id=%s"
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(updateSQL, (avg_lix, domainId))
+                cursor.close()
+        except:
+            print("error uupdateDomainLix")
+
+        self.connection.commit()
 
     ######
     # DOMAIN_EXTENSION
@@ -551,8 +595,10 @@ class Mysqldb:
 
         self.connection.commit()
 
- 
+    ##########
     ## WORDS
+    ##########
+
     def insertWord(self, word, wordCount=1):
         insertSQL = "INSERT INTO `word` (`word`,`word_count`) VALUES (%s, %s)"
         wordId = None
@@ -674,7 +720,7 @@ class Mysqldb:
 
         return words[lowerLimit:upperLimit]
 
-    ######
+    #########
     # Article
     #########
 
@@ -767,6 +813,24 @@ class Mysqldb:
 
         return articleIds
 
+    def selectArticlTfidfAndLix(self, limit=100):
+        selectSQL = "SELECT id, tfidf, lix, class FROM article WHERE tfidf > 0 and lix > 0 ORDER BY tfidf ASC LIMIT %s"
+        output = {}
+
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(selectSQL, (limit))
+                for row in cursor:
+                    output[row['id']] = [row['tfidf'], row['lix'], row['class']]
+                    #tfidf.append(row['tfidf'])
+                    #lix.append(row['lix'])
+                cursor.close()
+        except:
+            print("error selectArticlTfidfAndLix %s " % (cursor._last_executed))
+
+        return output
+
+
     def selectLinkFromArticle(self, articleId):
         selectSQL = "SELECT link_id FROM article WHERE id = %s"
         linkId = None
@@ -827,7 +891,7 @@ class Mysqldb:
         return articlesIds
 
     def selectArticleAndDomain(self, limit=1000):
-        selectSQL = ("SELECT  article.id article_id, domain.domain_name, domain_extension.extension, article.tfidf, article.lix FROM article join link on link.id =  article.link_id join domain on link.domain_id = domain.id join domain_extension on domain.domain_extension_id = domain_extension.id order by article.tfidf desc LIMIT %s")
+        selectSQL = ("SELECT  article.id article_id, domain.id domain_id, domain_extension.extension, article.tfidf, article.lix FROM article join link on link.id =  article.link_id join domain on link.domain_id = domain.id join domain_extension on domain.domain_extension_id = domain_extension.id order by article.tfidf desc LIMIT %s")
 
         articleAndDomain = {}        
 
@@ -835,12 +899,13 @@ class Mysqldb:
             with self.connection.cursor() as cursor:
                 cursor.execute(selectSQL, (limit))
                 for row in cursor:
-                    articleAndDomain[row['article_id']] = [row['domain_name'], row['extension'], row['tfidf'], row['lix']]
+                    articleAndDomain[row['article_id']] = [row['domain_id'], row['extension'], row['tfidf'], row['lix']]
                 cursor.close()
         except:
             print("error selectArticleAndDomain:\n%s " % (cursor._last_executed))
 
         return articleAndDomain
+
     def selectArticleFromWord(self, wordId):
         selectSQL = "SELECT article_id FROM article_word WHERE word_id = %s"
         articlesIds = []
@@ -855,6 +920,24 @@ class Mysqldb:
             print("error selecting article from word ids: %s " % (cursor._last_executed))
 
         return articlesIds
+
+    def selectArticlesWithClass(self, classes, tfidfLimit=0.4, limitLow=0, batchSize=18446744073709551615):
+        selectSQL = "SELECT id, class FROM article WHERE class in (%s) and tfidf > %s LIMIT %s,%s"
+        in_p=', '.join(list(map(lambda x: '%s', classes)))
+        selectSQL = selectSQL % (in_p, tfidfLimit, limitLow, batchSize)
+
+        articleIds = {}
+
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(selectSQL, classes)
+                for row in cursor:
+                    articleIds[row['id']] = row['class']
+                cursor.close()
+        except: 
+            print("error selectArticlesWithClass: %s " % (cursor._last_executed))
+
+        return articleIds
 
     def selectWordsFromArticle(self, articleId):
         selectSQL = "SELECT word_id, count FROM article_word WHERE article_id = %s"
