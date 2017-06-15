@@ -70,6 +70,22 @@ class Mysqldb:
 
         self.connection.commit()
 
+
+    def selectTweetText(self, time_range):
+        selectSQL = "SELECT text FROM tweets WHERE created >= %s"
+        texts = [] 
+
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(selectSQL, (time_range))
+                for row in cursor:
+                    texts.append(row['text'])
+
+                cursor.close()
+        except: 
+            print("error selectTweetText %s " % (cursor._last_executed))
+
+        return texts
     ######
     #   USER
     ######

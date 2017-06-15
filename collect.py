@@ -6,6 +6,8 @@ from mysqldb import Mysqldb
 import pymysql
 from config import *
 from linkUtils import LinkUtils
+from medicalTerms import *
+import random
 
 # Variables that contains the user credentials to access Twitter API
 consumer_key = 'O9x02NEsZyaOZ9x4vUmLrw3Ds'
@@ -46,32 +48,44 @@ class MyStreamListener(tweepy.StreamListener):
         self.db = db
 
     def on_data(self, data):
-        # Twitter returns data in JSON format - we need to decode it first
-        tweet = json.loads(data)
-        
-        if tweet != None and "lang" in tweet and tweet['lang'] == "en" and 'entities' in tweet and 'urls' in tweet['entities']:
-            urls = tweet['entities']['urls']
-            links = []
+        try:
+            # Twitter returns data in JSON format - we need to decode it first
+            tweet = json.loads(data)
+            
+            if tweet != None and "lang" in tweet and tweet['lang'] == "en" and 'entities' in tweet and 'urls' in tweet['entities']:
+                urls = tweet['entities']['urls']
+                links = []
 
-            for url in urls:
-                if url['expanded_url'] != None:
-                    links = links + [self.db.insertLink(url['expanded_url'])]
-            if len(links) > 0 and not all(link is None for link in links):
-                userId = self.db.insertUser(tweet)
-                self.db.insertTweet(userId, tweet, links)   
-    
+                for url in urls:
+                    if url['expanded_url'] != None:
+                        domain, domainExtension = self.linkUtils.linkSplitter(url['expanded_url'])
+                        links = links + [self.db.insertLink(url['expanded_url'], domain, domainExtension)]
+                if len(links) > 0 and not all(link is None for link in links):
+                    userId = self.db.insertUser(tweet)
+                    self.db.insertTweet(userId, tweet, links)   
+        
+        except Exception as e:
+            print(e)
+
         return True
 
     def on_error(self, status):
         print (self)
         print (status)
 
+    def getStreamMedicalWords(self, n):
+        terms = []
+        for _ in range(0,n):
+            terms.append(random.choice(medicalTerms))
+        return terms
 
 if __name__ == '__main__':
     with Mysqldb(**mysqlconfig) as db:
         myStreamListener = MyStreamListener(db)
         myStream = tweepy.Stream(auth=auth, listener=myStreamListener)
-        myStream.filter(track=['flu','cancer','influenca','disease','treatment'])
+        terms = myStreamListener.getStreamMedicalWords(4)
+        print(terms)
+        myStream.filter(track=terms)
 
     
     print ("Showing all new tweets for the selected tags:")

@@ -22,7 +22,7 @@ class PrepareData():
 		for word in words:
 			if not word in stop_words:
 				outputWords.append(word)
-		print(outputWords)
+		return outputWords
 
 	def NLTKremoveStopWordsFromDict(self, inputWords):
 		stop_words = set(stopwords.words('english'))
