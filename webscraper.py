@@ -1,8 +1,10 @@
+from Mysqldb import Mysqldb
+from LinkUtils import LinkUtils
+
 from html.parser import HTMLParser
 from urllib.request import urlopen
 from urllib import parse
-from mysqldb import Mysqldb
-from linkUtils import LinkUtils
+
 from config import *
 
 class WebScraper(HTMLParser):

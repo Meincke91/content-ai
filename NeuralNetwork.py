@@ -1,42 +1,60 @@
-from prepareData import PrepareData
-from mysqldb import Mysqldb
-from config import *
+from PrepareData import PrepareData
+from Mysqldb import Mysqldb
+
 import numpy as np
 import time
+import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data
+
+from config import *
 
 class NeuralNetwork():
 	"""docstring for ClassName"""
-	def __init__(self):
-		self.prepareData = PrepareData()
+	def __init__(self, db):
+		self.prepareData = PrepareData(db)
 
-	def fetch_data(self):
-		dataSet = self.prepareData.getTrainingDocuments()
+	def train(self):
+		mnist = input_data.read_data_sets("/tmp/data/", one_hot = True)
+		n_nodes_hl1 = 500
+		n_nodes_hl2 = 500
+		n_nodes_hl3 = 500
+		n_classes = 10
+		batch_size = 100
 
-	def sigmoid(self, x):
-		output = 1/(1+np.exp(-x))
-    	return output
+		x = tf.placeholder('float', [None, 784])
+		y = tf.placeholder('float')
 
-	def sigmoid_derivative(self, output):
-    	return output*(1-output)
+		l1 = tf.add(tf.matmul(data,hidden_1_layer['weights']), hidden_1_layer['biases'])
+		l1 = tf.nn.relu(l1)
 
-	def think(self, sentence, show_details=False):
-		print()
+		l2 = tf.add(tf.matmul(l1,hidden_2_layer['weights']), hidden_2_layer['biases'])
+		l2 = tf.nn.relu(l2)
 
-	def train(self, X, y, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
-		print()
+		l3 = tf.add(tf.matmul(l2,hidden_3_layer['weights']), hidden_3_layer['biases'])
+		l3 = tf.nn.relu(l3)
 
-	def test():
-		X = np.array(training)
-		y = np.array(output)
+		output = tf.matmul(l3,output_layer['weights']) + output_layer['biases']
 
-		start_time = time.time()
+		return output
 
-		train(X, y, hidden_neurons=20, alpha=0.1, epochs=100000, dropout=False, dropout_percent=0.2)
+	def neural_network_model(data):
+		hidden_1_layer = {'weights':tf.Variable(tf.random_normal([784, n_nodes_hl1])),
+						  'biases':tf.Variable(tf.random_normal([n_nodes_hl1]))}
 
-		elapsed_time = time.time() - start_time
-		print ("processing time:", elapsed_time, "seconds")
+		hidden_2_layer = {'weights':tf.Variable(tf.random_normal([n_nodes_hl1, n_nodes_hl2])),
+						  'biases':tf.Variable(tf.random_normal([n_nodes_hl2]))}
 
+		hidden_3_layer = {'weights':tf.Variable(tf.random_normal([n_nodes_hl2, n_nodes_hl3])),
+						  'biases':tf.Variable(tf.random_normal([n_nodes_hl3]))}
+
+		output_layer = {'weights':tf.Variable(tf.random_normal([n_nodes_hl3, n_classes])),
+						'biases':tf.Variable(tf.random_normal([n_classes]))}
+
+	def train_neural_network(x):
+		prediction = neural_network_model(x)
+		cost = tf.reduce_mean( tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y) )
+		
 if __name__ == '__main__':
-	prepareData = PrepareData()
-	prepareData.removeStopWords(["one"])
+	with Mysqldb(**mysqlconfig) as db:
+		neuralNetwork = NeuralNetwork(db)
 		

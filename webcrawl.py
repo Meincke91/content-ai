@@ -1,19 +1,23 @@
+from Mysqldb import Mysqldb
+from LinkUtils import LinkUtils
+from Webscraper import WebScraper
+from PrepareData import PrepareData
+
 from html.parser import HTMLParser
 from urllib.request import urlopen
 from urllib import parse
 from urllib.parse import urlparse
-from mysqldb import Mysqldb
-from linkUtils import LinkUtils
-from webscraper import WebScraper
+import re
+import operator
+
 from config import *
 from medicalTerms import *
 
-import re
-
-class LinkParser(HTMLParser):
+class WebCrawler(HTMLParser):
 	def __init__(self, db):
 		HTMLParser.__init__(self) 
 		self.db = db
+		self.prepareData = PrepareData(db)
 
 	def on_error(self, status):
 		print (self)
@@ -49,7 +53,7 @@ class LinkParser(HTMLParser):
 					
 
 				#for char in '?.!/;:+}{[]"_<>#€%˜$¯”,\'=()*’´`“\\':  
-				#	wordL = wordL.replace(char,'')  
+				#   wordL = wordL.replace(char,'')  
 
 				if len(wordL) < 50 and len(wordL) > 0 and (not (wordL == "" or wordL == " " or wordL == "\n" or wordL == "\t" or wordL[0] in '0123456789- –')):
 					if not wordL in self.words:
@@ -124,7 +128,81 @@ class LinkParser(HTMLParser):
 
 	def updateRelations(self, newUrl, oldUrl):
 		print()
-		
+
+
+	def tfidfSpider(self, keywords, top_ranked=3, max_iterations=200000):
+		current_iteration = 0
+
+		while current_iteration < max_iterations:
+			current_iteration = current_iteration + 1
+
+			tfidfs = self.prepareData.calculateTFIDFs(keywords)
+			sorted_tfidfs = sorted(tfidfs.items(), key=operator.itemgetter(1))[-top_ranked:]
+
+			for article_id in sorted_tfidfs:
+				domain_id = self.db.selectDomainFromArticle(article_id[0])
+				print(article_id)
+				# social media sites
+				blackListDomainIds = [27600, 27640, 27658, 27697, 27714, 27859, 27889, 27887, 27888, 27947, 27958, 27966, 27969]
+				if not domain_id in blackListDomainIds:
+					relatedDomains = self.db.selectRelatedFromBase(domain_id)
+					if (not relatedDomains is None) and len(relatedDomains) > 0:
+						links_dict = self.db.selectDomainLinksFromIds(relatedDomains)
+						for baseLinkId, url in links_dict.items():
+							self.db.updateCrawledLink(baseLinkId)
+							baseDomainId = self.db.selectOnlyDomainFromId(baseLinkId)
+							self.words = {}
+							links = self.scrapeSite(url)
+							articleId = self.db.insertArticle(baseLinkId)
+
+							for key, value in self.words.items():
+								wordId = self.db.selectWord(key)
+								if wordId == None:
+									wordId = self.db.insertWord(key, value)
+								else:
+									self.db.updateWord(wordId, value)
+
+								self.db.insertArticleWord(articleId, wordId, value)
+							if(links != None and len(links) > 0):
+
+								self.insertLinks(baseDomainId, links) 
+
+
+	def weightedSpider(self, maxLinks=10000):
+		webscraper = WebScraper()
+		links = []
+		self.words = {}
+
+		numberVisited = 0
+
+		while numberVisited < maxLinks:
+			numberVisited = numberVisited + 1
+			domainId = self.db.selectDomainFromHighestRelatedTFIDF()
+			baseLinkId, url = self.db.selectDomainLinks(domainId)
+
+			self.db.updateCrawledLink(baseLinkId)
+			# print("%s %s %s " % (baseLinkId, url, domainId))
+			try:
+				self.words = {}
+				links = self.scrapeSite(url)
+				articleId = self.db.insertArticle(baseLinkId)
+
+				for key, value in self.words.items():
+					wordId = self.db.selectWord(key)
+					if wordId == None:
+						wordId = self.db.insertWord(key, value)
+					else:
+						self.db.updateWord(wordId, value)
+
+					self.db.insertArticleWord(articleId, wordId, value)
+				if(links != None and len(links) > 0):
+					self.insertLinks(domainId, links) 
+
+			except Exception as e:
+				print("error spider2: %s " % (e))
+
+	#def findAndInsertTFIDF(self, wordId, articleId, wordId):
+	#	insertArticleTFIDF
 
 	def spider(self, maxLinks=10000):
 		webScraper = WebScraper()
@@ -162,6 +240,38 @@ class LinkParser(HTMLParser):
 
 			
 			#print("done with links")
+
+	def spiderList(self, maxLinks=10000):
+		webScraper = WebScraper()
+		links = self.db.selectUncrawledLinkList(maxLinks)
+		self.words = {}
+
+		for baseLinkId, value in links.items():
+			url = value[0]
+			domainId = value[1]
+
+			print("%s %s %s " % (baseLinkId, url, domainId))
+			try:
+				self.db.updateCrawledLink(baseLinkId)
+				self.words = {}
+				links = self.scrapeSite(url)
+				articleId = self.db.insertArticle(baseLinkId)
+
+				print(url)
+
+				for key, value in self.words.items():
+					wordId = self.db.selectWord(key)
+					if wordId == None:
+						wordId = self.db.insertWord(key, value)
+					else:
+						self.db.updateWord(wordId, value)
+
+					self.db.insertArticleWord(articleId, wordId, value)
+				if(links != None and len(links) > 0):
+					self.insertLinks(domainId, links) 
+
+			except Exception as e:
+				print("error spider2: %s " % (e))
 
 	def domainSpider(self, keywords):
 		webScraper = WebScraper()
@@ -224,9 +334,9 @@ if __name__ == '__main__':
 
 
 	with Mysqldb(**mysqlconfig) as db:
-		linkParser = LinkParser(db)
-		#linkParser.insertDomainExtensions()
-		linkParser.domainSpider(medicalTerms)
+		webCrawler = WebCrawler(db)
+		#ebCrawler.insertDomainExtensions()
+		webCrawler.tfidfSpider()
 		
 
 		#html, links = linkParser.getLinks('http://bit.ly/yk3b9m')

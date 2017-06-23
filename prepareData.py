@@ -1,10 +1,12 @@
-from mysqldb import Mysqldb
-from config import *
+from Mysqldb import Mysqldb
+
 from nltk.corpus import stopwords
 from nltk.stem.lancaster import LancasterStemmer
 import numpy as np
 import operator
 from math import log2
+
+from config import *
 from medicalTerms import *
 from blacklist import *
 
@@ -162,6 +164,31 @@ class PrepareData():
 			print("batch %s done. with batch-size of: %s. First id: %s. Total length of data: %s" % (currentBatch, batchSize, articleId, len(training_data)))
 		return training_data
 
+	def getTrainingData(self, batchSize=1000, batches=1000):
+		training_data = []
+
+		currentBatch = 0
+		while currentBatch < batches:
+			articles = self.db.selectArticles(limitLow=batchSize*currentBatch, batchSize=batchSize)
+			currentBatch = currentBatch + 1
+
+			if len(articles) < batchSize:
+				currentBatch = batches
+
+			bowSize = self.db.selectWordCount()
+			
+			for articleId in articles:
+				bow = [0] * (bowSize + 1)
+				words = self.db.selectWordsFromArticle(articleId)
+				
+				if len(words) > 0:	
+					for wordId, value in words.items():
+						bow[wordId] = value
+
+				training_data.append(bow)
+
+		return training_data
+
 	def getCompleteData(self):
 		documents, classes, words = self.getTrainingDocuments(prepareData.getRealData())
 		X, Y = self.training_set(documents, classes, words)
@@ -220,6 +247,54 @@ class PrepareData():
 		"""
 		print("done")
 
+	def calculateTFIDFs(self, keywords, batchSize=100000):
+		currentCount = 0
+		tfidfs = {} 
+		wordIds = []
+
+		for keyword in keywords:
+			wordIds.append(self.db.selectWord(keyword.lower()))
+
+		wordIds = self.removeNoneFromArray(wordIds)
+
+		articleIds= self.db.selectBaseArticlesFromWords(wordIds)
+		print(len(articleIds))
+		for articleId in articleIds:
+			domain_id = self.db.selectDomainFromArticle(articleId)
+			
+			relatedDomains = self.db.selectRelatedFromBase(domain_id)
+
+			if (not relatedDomains is None) and len(relatedDomains) > 0:
+				links_dict = self.db.selectDomainLinksFromIds(relatedDomains)
+
+				if len(links_dict) > 0:
+					#linkId = self.db.selectLinkFromArticle(articleId)
+					#linkStr = self.db.selectLinkStr(linkId)
+					#print(linkStr)
+					#if self.isLinkRelevant(linkStr, linkId):
+					TFIDF = self.calculateTFIDF(keywords, articleId)
+					if TFIDF > 0.0:	
+						print(TFIDF)
+						#self.db.updateArticleTFIDF(articleId, TFIDF)
+						tfidfs[articleId] = TFIDF
+
+		return tfidfs
+
+	def calculateAllTFIDFs(self, keywords):
+		tfidfs = {} 
+
+		articleIds = self.db.selectArticlesByTime()
+		totalLen = len(articleIds)
+		current = 1
+		for articleId in articleIds:
+			print("%s/%s" % (totalLen, current))
+			current = current + 1
+
+			TFIDF = self.calculateTFIDF(keywords, articleId)
+			tfidfs[articleId] = TFIDF
+
+		return tfidfs
+
 	def estimateArticleClass(self):
 		# estimate class based on tfidf being higher than domain average, and in the top 95 percent of all tfidf values
 		articleTfidfAndLix = self.db.selectArticlTfidfAndLix(100000)
@@ -247,6 +322,23 @@ class PrepareData():
 		LixValue = sorted(lix)[index]
 
 		return tfidfValue, LixValue 
+
+	def groupDictValues(self, dict, groupSize=100):
+		groups = []
+		allValues = []
+		
+
+		for key, value in dict.items():
+			allValues.append(value)
+
+		allValues = allValues[:len(allValues)-len(allValues)%groupSize]
+
+		values2d = np.transpose(np.reshape(np.array(allValues), (groupSize, -1)))
+
+		for row in values2d:
+			groups.append(np.mean(row))
+		return groups
+
 
 	def calculateAverageDomainStats(self):
 		articleAndDomains = self.db.selectArticleAndDomain(100000)
@@ -293,23 +385,27 @@ class PrepareData():
 
 		return lix
 
-	def calculateTDIDF(self, keywords, articleId=None):
-		print("calculateTDIDF %s " % (articleId))
+	def calculateTFIDF(self, keywords, articleId, useBaseLinks=True):
 		wordIds = []
 		TFIDF = 0
 		for keyword in keywords:
 			wordIds.append(self.db.selectWord(keyword.lower()))
 
 		wordIds = self.removeNoneFromArray(wordIds)
+		if len(wordIds) == 0:
+					return 0.0
 
-		articleIds = self.db.selectArticleFromWords(wordIds)
+		if useBaseLinks:
+			articleIds = self.db.selectBaseArticlesFromWords(wordIds)
+		else:
+			articleIds = self.db.selectArticleFromWords(wordIds)
 
 		N = self.db.selectArticleSize()
 
-		IDF = log2(N/len(articleIds))
+		if len(articleIds) == 0:
+			return 0.0
 
-		if articleId is None:
-			articleId = articleIds[0]
+		IDF = log2(N/len(articleIds))
 
 		words = self.db.selectWordsFromArticle(articleId)
 
@@ -334,10 +430,8 @@ class PrepareData():
 		return TFIDF
 
 	def getMaximumValueFromDict(self, dictionary):
-		print("getMaximumValueFromDict %s" % (len(dictionary)))
 		maxValue = 0
 		for key, value in dictionary.items():
-			print(value)
 			if value > maxValue:
 				maxValue = value
 		return maxValue
@@ -358,13 +452,12 @@ class PrepareData():
 				if not domain in blacklistedDomains:
 					return True
 		return False
-	def asdsad():
-		 ".".join((row['domain_name'], row['extension']))
 
 if __name__ == '__main__':
 	with Mysqldb(**mysqlconfig) as db:
 		prepareData = PrepareData(db)
-		prepareData.estimateMedicalWebsites(batchSize=100)
+		#prepareData.estimateMedicalWebsites(batchSize=100)
+		print(prepareData.getTrainingData())
 		#prepareData.getRealData()
 		#print(prepareData.calculateTDIDF(medicalTerms))
 

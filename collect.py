@@ -52,17 +52,18 @@ class MyStreamListener(tweepy.StreamListener):
             # Twitter returns data in JSON format - we need to decode it first
             tweet = json.loads(data)
             
-            if tweet != None and "lang" in tweet and tweet['lang'] == "en" and 'entities' in tweet and 'urls' in tweet['entities']:
+            if tweet != None and "lang" in tweet and tweet['lang'] == "en":
+                print("---------------------")
+                print(tweet['text'])
                 urls = tweet['entities']['urls']
                 links = []
-
-                for url in urls:
-                    if url['expanded_url'] != None:
-                        domain, domainExtension = self.linkUtils.linkSplitter(url['expanded_url'])
-                        links = links + [self.db.insertLink(url['expanded_url'], domain, domainExtension)]
-                if len(links) > 0 and not all(link is None for link in links):
-                    userId = self.db.insertUser(tweet)
-                    self.db.insertTweet(userId, tweet, links)   
+                if 'entities' in tweet and 'urls' in tweet['entities']:
+                    for url in urls:
+                        if url['expanded_url'] != None:
+                            domain, domainExtension = self.linkUtils.linkSplitter(url['expanded_url'])
+                            links = links + [self.db.insertLink(url['expanded_url'], domain, domainExtension)]
+                userId = self.db.insertUser(tweet)
+                self.db.insertTweet(userId, tweet, links)   
         
         except Exception as e:
             print(e)
@@ -72,23 +73,27 @@ class MyStreamListener(tweepy.StreamListener):
     def on_error(self, status):
         print (self)
         print (status)
+        return False
 
     def getStreamMedicalWords(self, n):
         terms = []
         for _ in range(0,n):
-            terms.append(random.choice(medicalTerms))
-        return terms
+            terms.append(random.choice(medicalTerms).lower())
+        return list(set(terms))
 
 if __name__ == '__main__':
     with Mysqldb(**mysqlconfig) as db:
-        myStreamListener = MyStreamListener(db)
-        myStream = tweepy.Stream(auth=auth, listener=myStreamListener)
-        terms = myStreamListener.getStreamMedicalWords(4)
-        print(terms)
-        myStream.filter(track=terms)
+        while(True):
+            try:
+                myStreamListener = MyStreamListener(db)
+                myStream = tweepy.Stream(auth=auth, listener=myStreamListener)
+                terms = myStreamListener.getStreamMedicalWords(400)
+                print(terms)
+                myStream.filter(track=terms)
+            except Exception as e:
+                print(e)
 
-    
-    print ("Showing all new tweets for the selected tags:")
+        
 
     # There are different kinds of streams: public stream, user stream, multi-user streams
     # In this example follow #programming tag

@@ -1,11 +1,14 @@
+
+from Mysqldb import Mysqldb
+from PrepareData import PrepareData
+
 from sklearn.datasets import load_iris
 from sklearn.ensemble import RandomForestClassifier
-from mysqldb import Mysqldb
-from config import *
-from prepareData import PrepareData
 import pandas as pd
 import numpy as np
 import pickle
+
+from config import *
 
 class RandomForest():
 	"""docstring for ClassName"""

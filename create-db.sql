@@ -1,8 +1,8 @@
-CREATE DATABASE  IF NOT EXISTS `zebra` /*!40100 DEFAULT CHARACTER SET utf8 */;
-USE `zebra`;
+CREATE DATABASE  IF NOT EXISTS `contentai3` /*!40100 DEFAULT CHARACTER SET utf8 */;
+USE `contentai3`;
 -- MySQL dump 10.13  Distrib 5.7.17, for macos10.12 (x86_64)
 --
--- Host: localhost    Database: zebra
+-- Host: localhost    Database: contentai2
 -- ------------------------------------------------------
 -- Server version 5.7.17
 
@@ -27,10 +27,36 @@ DROP TABLE IF EXISTS `article`;
 CREATE TABLE `article` (
   `id` int(32) unsigned NOT NULL AUTO_INCREMENT,
   `link_id` int(32) unsigned DEFAULT NULL,
+  `class` int(11) DEFAULT NULL,
+  `tfidf` float unsigned DEFAULT NULL,
+  `lix` float unsigned DEFAULT NULL,
+  `created` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `link_id` (`link_id`),
   CONSTRAINT `article_ibfk_1` FOREIGN KEY (`link_id`) REFERENCES `link` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=51498 DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `article_tfidf`
+--
+
+DROP TABLE IF EXISTS `article_tfidf`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `article_tfidf` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `word_id` int(10) unsigned NOT NULL,
+  `tfidf` float NOT NULL,
+  `article_id` int(10) unsigned NOT NULL,
+  `created` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `id_UNIQUE` (`id`),
+  KEY `article_id_idx` (`article_id`),
+  KEY `word_id_idx` (`word_id`),
+  CONSTRAINT `article_id` FOREIGN KEY (`article_id`) REFERENCES `article` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `word_id` FOREIGN KEY (`word_id`) REFERENCES `word` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -45,12 +71,13 @@ CREATE TABLE `article_word` (
   `article_id` int(32) unsigned NOT NULL,
   `word_id` int(32) unsigned NOT NULL,
   `count` int(32) unsigned NOT NULL,
+  `created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `id_idx` (`word_id`),
   KEY `article_id` (`article_id`),
   CONSTRAINT `article_word_ibfk_1` FOREIGN KEY (`article_id`) REFERENCES `article` (`id`),
   CONSTRAINT `article_word_ibfk_2` FOREIGN KEY (`word_id`) REFERENCES `word` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1190019 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=256358151 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -64,10 +91,13 @@ CREATE TABLE `domain` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `domain_name` varchar(256) NOT NULL DEFAULT '',
   `domain_extension_id` int(32) unsigned NOT NULL,
+  `avg_tfidf` float unsigned DEFAULT NULL,
+  `avg_lix` float unsigned DEFAULT NULL,
+  `created` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `domain_extension_id` (`domain_extension_id`),
   CONSTRAINT `domain_ibfk_1` FOREIGN KEY (`domain_extension_id`) REFERENCES `domain_extension` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4342 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=27599 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -82,7 +112,7 @@ CREATE TABLE `domain_extension` (
   `extension` varchar(32) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `extension` (`extension`)
-) ENGINE=InnoDB AUTO_INCREMENT=2786 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=5568 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -97,12 +127,13 @@ CREATE TABLE `domain_relation` (
   `base_domain_id` int(32) unsigned NOT NULL,
   `related_domain_id` int(32) unsigned NOT NULL,
   `count` int(32) unsigned NOT NULL DEFAULT '0',
+  `created` varchar(45) NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
   PRIMARY KEY (`id`),
   KEY `base_domain_id` (`base_domain_id`),
   KEY `related_domain_id` (`related_domain_id`),
   CONSTRAINT `domain_relation_ibfk_1` FOREIGN KEY (`base_domain_id`) REFERENCES `domain` (`id`),
   CONSTRAINT `domain_relation_ibfk_2` FOREIGN KEY (`related_domain_id`) REFERENCES `domain` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=405 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=37303 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -115,13 +146,14 @@ DROP TABLE IF EXISTS `link`;
 CREATE TABLE `link` (
   `id` int(32) unsigned NOT NULL AUTO_INCREMENT,
   `created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `link_str` varchar(512) DEFAULT '',
+  `link_str` varchar(512) NOT NULL DEFAULT '',
   `domain_id` int(32) unsigned NOT NULL,
   `crawled` tinyint(4) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `link_str_UNIQUE` (`link_str`),
   KEY `domain_id` (`domain_id`),
   CONSTRAINT `link_ibfk_1` FOREIGN KEY (`domain_id`) REFERENCES `domain` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=33459 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=415059 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -166,7 +198,7 @@ CREATE TABLE `tweets` (
   CONSTRAINT `tweets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
   CONSTRAINT `tweets_ibfk_2` FOREIGN KEY (`retweet_user`) REFERENCES `user` (`id`),
   CONSTRAINT `tweets_ibfk_3` FOREIGN KEY (`in_reply_to_user_id`) REFERENCES `user` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=12088 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=94276 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -187,7 +219,7 @@ CREATE TABLE `user` (
   `statuses_count` int(11) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `twitter_id_str` (`id_str`)
-) ENGINE=InnoDB AUTO_INCREMENT=76716 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=147430 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -204,7 +236,7 @@ CREATE TABLE `word` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `word_UNIQUE` (`word`),
   KEY `word` (`word`)
-) ENGINE=InnoDB AUTO_INCREMENT=429881 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=618637 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -216,4 +248,4 @@ CREATE TABLE `word` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2017-05-30 16:00:18
+-- Dump completed on 2017-06-21  8:13:13
