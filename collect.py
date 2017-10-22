@@ -10,10 +10,10 @@ from medicalTerms import *
 import random
 
 # Variables that contains the user credentials to access Twitter API
-consumer_key = 'O9x02NEsZyaOZ9x4vUmLrw3Ds'
-consumer_secret = '8eJnaPf6ishuFNBPNGZAqK0ecODiTs60VnLcsaGN5CBqhABmEG'
-access_token = '3004912756-JlfYMfxVdChpsdZhOd0S7f1HoshbCElqwaZjpMk'
-access_token_secret = 'Toe58VSOuLAMd4WrDRdLzspwoTCe71xvl8ZEcsgb3iZcV'
+consumer_key = ''
+consumer_secret = ''
+access_token = ''
+access_token_secret = ''
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
