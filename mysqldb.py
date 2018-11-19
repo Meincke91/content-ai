@@ -1130,7 +1130,7 @@ class Mysqldb:
 		return articleIds
 
 	def selectArticlesByTime(self):
-		selectSQL = "SELECT id FROM contentai3.article order by created asc;"
+		selectSQL = "SELECT id FROM contentai3.article order by created asc"
 
 		articleIds = []
 
